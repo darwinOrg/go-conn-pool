@@ -42,7 +42,7 @@ func TestPool_Get_Impl(t *testing.T) {
 
 	_, ok := conn.(*PoolConn)
 	if !ok {
-		t.Errorf("Conn is not of type poolConn")
+		t.Error("Conn is not of type poolConn")
 	}
 }
 
@@ -115,7 +115,7 @@ func TestPool_Put(t *testing.T) {
 
 	conn.Close() // try to put into a full pool
 	if p.Len() != 0 {
-		t.Errorf("Put error. Closed pool shouldn't allow to put connections.")
+		t.Error("Put error. Closed pool shouldn't allow to put connections.")
 	}
 }
 
@@ -131,18 +131,18 @@ func TestPool_PutUnusableConn(t *testing.T) {
 	conn, _ = p.Get()
 	conn.Close()
 	if p.Len() != poolSize {
-		t.Errorf("Pool size is expected to be equal to initial size")
+		t.Error("Pool size is expected to be equal to initial size")
 	}
 
 	conn, _ = p.Get()
 	if pc, ok := conn.(*PoolConn); !ok {
-		t.Errorf("impossible")
+		t.Error("impossible")
 	} else {
 		pc.MarkUnusable()
 	}
 	conn.Close()
 	if p.Len() != poolSize-1 {
-		t.Errorf("Pool size is expected to be initial_size - 1", p.Len(), poolSize-1)
+		t.Error("Pool size is expected to be initial_size - 1", p.Len(), poolSize-1)
 	}
 }
 
@@ -165,16 +165,16 @@ func TestPool_Close(t *testing.T) {
 	c := p.(*channelPool)
 
 	if c.conns != nil {
-		t.Errorf("Close error, conns channel should be nil")
+		t.Error("Close error, conns channel should be nil")
 	}
 
 	if c.factory != nil {
-		t.Errorf("Close error, factory should be nil")
+		t.Error("Close error, factory should be nil")
 	}
 
 	_, err := p.Get()
 	if err == nil {
-		t.Errorf("Close error, get conn should return an error")
+		t.Error("Close error, get conn should return an error")
 	}
 
 	if p.Len() != 0 {

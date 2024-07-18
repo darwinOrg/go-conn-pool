@@ -3,8 +3,10 @@ package pool
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sync"
+	"time"
 )
 
 // channelPool implements the Pool interface based on buffered channels.
@@ -50,19 +52,18 @@ func NewChannelPool(initialCap, maxCap int, factory Factory) (Pool, error) {
 	return c, nil
 }
 
-func (c *channelPool) getConnsAndFactory() (chan net.Conn, Factory) {
+func (c *channelPool) getConns() chan net.Conn {
 	c.mu.RLock()
 	conns := c.conns
-	factory := c.factory
 	c.mu.RUnlock()
-	return conns, factory
+	return conns
 }
 
 // Get implements the Pool interfaces Get() method. If there is no new
 // connection available in the pool, a new connection will be created via the
 // Factory() method.
 func (c *channelPool) Get() (net.Conn, error) {
-	conns, factory := c.getConnsAndFactory()
+	conns := c.getConns()
 	if conns == nil {
 		return nil, ErrClosed
 	}
@@ -73,30 +74,19 @@ func (c *channelPool) Get() (net.Conn, error) {
 			return nil, ErrClosed
 		}
 
-		if err := c.checkConn(conn); err != nil {
-			if closeErr := conn.Close(); closeErr != nil {
-				// Log the error or handle it as needed
-				fmt.Println("Error closing connection: ", closeErr)
-			}
-			return c.newConn(factory)
+		if !c.isHealthy(conn) {
+			_ = conn.Close()
+			return c.newConn()
 		}
 
 		return c.wrapConn(conn), nil
 	default:
-		return c.newConn(factory)
+		return c.newConn()
 	}
 }
 
-func (c *channelPool) checkConn(conn net.Conn) error {
-	buf := make([]byte, 1)
-	if _, err := conn.Read(buf); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (c *channelPool) newConn(factory Factory) (net.Conn, error) {
-	conn, err := factory()
+func (c *channelPool) newConn() (net.Conn, error) {
+	conn, err := c.factory()
 	if err != nil {
 		return nil, err
 	}
@@ -143,11 +133,19 @@ func (c *channelPool) Close() {
 
 	close(conns)
 	for conn := range conns {
-		conn.Close()
+		_ = conn.Close()
 	}
 }
 
 func (c *channelPool) Len() int {
-	conns, _ := c.getConnsAndFactory()
-	return len(conns)
+	return len(c.getConns())
+}
+
+func (c *channelPool) isHealthy(conn net.Conn) bool {
+	// 快速检查连接是否健康，例如读取一个字节或发送心跳
+	// 注意：这里需要设置超时以防止阻塞
+	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	buf := make([]byte, 1)
+	n, err := conn.Read(buf)
+	return n > 0 || err == io.EOF
 }
