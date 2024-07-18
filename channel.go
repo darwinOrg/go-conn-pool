@@ -67,23 +67,41 @@ func (c *channelPool) Get() (net.Conn, error) {
 		return nil, ErrClosed
 	}
 
-	// wrap our connections with out custom net.Conn implementation (wrapConn
-	// method) that puts the connection back to the pool if it's closed.
 	select {
 	case conn := <-conns:
 		if conn == nil {
 			return nil, ErrClosed
 		}
 
-		return c.wrapConn(conn), nil
-	default:
-		conn, err := factory()
-		if err != nil {
-			return nil, err
+		if err := c.checkConn(conn); err != nil {
+			if closeErr := conn.Close(); closeErr != nil {
+				// Log the error or handle it as needed
+				fmt.Println("Error closing connection: ", closeErr)
+			}
+			return c.newConn(factory)
 		}
 
 		return c.wrapConn(conn), nil
+	default:
+		return c.newConn(factory)
 	}
+}
+
+func (c *channelPool) checkConn(conn net.Conn) error {
+	buf := make([]byte, 1)
+	if _, err := conn.Read(buf); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *channelPool) newConn(factory Factory) (net.Conn, error) {
+	conn, err := factory()
+	if err != nil {
+		return nil, err
+	}
+
+	return c.wrapConn(conn), nil
 }
 
 // put puts the connection back to the pool. If the pool is full or closed,
