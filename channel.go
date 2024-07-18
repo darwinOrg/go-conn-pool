@@ -3,10 +3,8 @@ package pool
 import (
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"sync"
-	"time"
 )
 
 // channelPool implements the Pool interface based on buffered channels.
@@ -71,11 +69,6 @@ func (c *channelPool) Get() (net.Conn, error) {
 	select {
 	case conn := <-conns:
 		if conn == nil {
-			return nil, ErrClosed
-		}
-
-		if !c.isHealthy(conn) {
-			_ = conn.Close()
 			return c.newConn()
 		}
 
@@ -139,13 +132,4 @@ func (c *channelPool) Close() {
 
 func (c *channelPool) Len() int {
 	return len(c.getConns())
-}
-
-func (c *channelPool) isHealthy(conn net.Conn) bool {
-	// 快速检查连接是否健康，例如读取一个字节或发送心跳
-	// 注意：这里需要设置超时以防止阻塞
-	_ = conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	buf := make([]byte, 1)
-	n, err := conn.Read(buf)
-	return n > 0 || err == io.EOF
 }
