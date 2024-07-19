@@ -17,7 +17,7 @@ type Pool interface {
 	// Get returns a new connection from the pool. Closing the connections puts
 	// it back to the Pool. Closing it when the pool is destroyed or full will
 	// be counted as an error.
-	Get() (net.Conn, error)
+	Get() (net.Conn, bool, error)
 
 	// Close closes the pool and all its connections. After Close() the pool is
 	// no longer usable.
